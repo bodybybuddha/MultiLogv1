@@ -10,24 +10,34 @@ Set-StrictMode -Version Latest
 #Internal variables for the module 
 [int32]$DefaultNumOfArchives = 10
 [int64]$DefaultSizeOfArchives = 1mb
+[int32]$DefaultEventLogRetention = 10
+[int64]$DefaultEventLogSize = 20mb
 
-$Version = '1.0'
+$Version = '1.01'
 $ModuleName = 'MultiLogv1'
 
 Function Initialize-Log{
 [CmdletBinding()]
 Param (
-	[Parameter(Mandatory=$true)]
+	[Parameter(Mandatory=$True)]
 	[string]$ExecutingScriptName,
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$True)]
 	[ValidateSet('LOGFILE','EVENT','CIRCULAR')]
     [string]$LogType,
 	[Parameter(Mandatory=$True,ParameterSetName="LOGFILECIRCULAR")]
     [string]$LogFileName,	
-	[Parameter(Mandatory=$false,ParameterSetName="LOGFILECIRCULAR")]	
+	[Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
     [string]$LogFileExtension = '.log',
-    [Parameter(Mandatory=$false,ParameterSetName="EVENT")]	
-    [string]$EventLogName = $ModuleName	
+	[Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]
+    [string]$ArchiveSize = $DefaultSizeOfArchives,	
+	[Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
+    [string]$ArchiveNumber= $DefaultNumOfArchives,
+    [Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
+    [string]$EventLogName = $ModuleName,
+	[Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
+    [string]$EventLogRetention = $DefaultEventLogRetention,
+	[Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
+    [string]$EventLogSize = $DefaultEventLogSize
     )
 	
 	#####################################################################################
@@ -40,8 +50,8 @@ Param (
 		}		
 	}
     if($LogType -eq "EVENT") {
-		
-
+		#if(!$EventLogRetention){$EventLogRetention = $DefaultEventLogRetention}
+		#if(!$EventLogSize){$EventLogSize = $DefaultEventLogSize }
 	}
     if($LogType -eq "CIRCULAR") {
 		# Check for LogFileName - IF none found use the ExecutingScriptName and default logfile extension
@@ -73,12 +83,14 @@ Param (
 	
     if ($PSLoggingEnv.LogType -eq "EVENT") {
 		$PSLoggingEnv | Add-member -MemberType NoteProperty -name EventModuleName -value $EventLogName 
+		$PSLoggingEnv | Add-member -MemberType NoteProperty -name EventRetention -value $EventLogRetention 
+		$PSLoggingEnv | Add-member -MemberType NoteProperty -name EventLogSize -value $EventLogSize 
 	}
 	
     if ($PSLoggingEnv.LogType -eq "CIRCULAR") {
 		$PSLoggingEnv | Add-member -MemberType NoteProperty -name LogFileName -value $LogFileName  
-		$PSLoggingEnv | Add-member -MemberType NoteProperty -name ArchiveNumber -value $DefaultNumOfArchives 
-		$PSLoggingEnv | Add-member -MemberType NoteProperty -name ArchiveSize -value $DefaultSizeOfArchives 
+		$PSLoggingEnv | Add-member -MemberType NoteProperty -name ArchiveNumber -value $ArchiveNumber 
+		$PSLoggingEnv | Add-member -MemberType NoteProperty -name ArchiveSize -value $ArchiveSize 
 	}
     
 	
@@ -105,7 +117,10 @@ Param (
 		
 		$logFileExists = Get-EventLog -list | Where-Object {$_.logdisplayname -eq $PSLoggingEnv.EventModuleName} 
 		if (! $logFileExists) {
-			try {New-Eventlog -LogName $PSLoggingEnv.EventModuleName -Source $PSLoggingEnv.ScriptName -erroraction stop | Out-Null}
+			try {
+				New-Eventlog -LogName $PSLoggingEnv.EventModuleName -Source $PSLoggingEnv.ScriptName -erroraction stop | Out-Null
+				Limit-Eventlog -Logname $PSLoggingEnv.EventModuleName -OverflowAction OverwriteOlder -RetentionDays $PSLoggingEnv.EventRetention -MaximumSize $PSLoggingEnv.EventLogSize
+			}
 			catch [System.Security.SecurityException] {
 				Write-Error "Error:  Run as elevated user.  Unable to write or read to event logs."
 			}
@@ -113,7 +128,9 @@ Param (
 		
 		# Log does exist - see if the source is already registered
 			if(!(Test-Sourcename -SourceName $PSLoggingEnv.ScriptName) ){
-				try {New-Eventlog -LogName $PSLoggingEnv.EventModuleName -Source $PSLoggingEnv.ScriptName -erroraction stop | Out-Null}
+				try {
+					New-Eventlog -LogName $PSLoggingEnv.EventModuleName -Source $PSLoggingEnv.ScriptName -erroraction stop | Out-Null					
+				}
 				catch [System.Security.SecurityException] {
 					Write-Error "Error:  Run as elevated user.  Unable to write or read to event logs."
 				}
@@ -136,7 +153,7 @@ Param (
 
 function Test-Sourcename {
     Param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$True)]
         [string] $SourceName
     )
 
@@ -146,22 +163,22 @@ function Test-Sourcename {
 Function CheckLogObject{
 	[CmdletBinding()]
 	Param (
-		[Parameter(Mandatory=$true,Position=0)]
+		[Parameter(Mandatory=$True,Position=0)]
 		$LogObject 
 		)
-	if(-not $LogObject){return $false}
+	if(-not $LogObject){return $False}
 	
-	try{if($LogObject.LogModuleName -eq $ModuleName){return $true} else {return $false}} catch {return $false}
+	try{if($LogObject.LogModuleName -eq $ModuleName){return $True} else {return $False}} catch {return $False}
 	
-	return $false
+	return $False
 } # End Function CheckLogObject
 
 Function Start-Log{
 	[CmdletBinding()]
 	Param (
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$True)]
     $LogObject,
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$False)]
     [switch]$ByPassScreen
     )
 	
@@ -216,9 +233,9 @@ Function Start-Log{
 Function Stop-Log{
 [CmdletBinding()]
 Param (
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$True)]
     $LogObject,
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$False)]
     [switch]$ByPassScreen
     )
 	
@@ -337,9 +354,9 @@ Function Write-LogEntry {
         [Parameter(Mandatory = $True, ValueFromPipeline = $True)]
         [Alias("EventMessage", "EntryMessage")]
         [string]$Message,
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $False)]
         [int]$EventId = 0,
-        [Parameter(Mandatory = $false)]
+        [Parameter(Mandatory = $False)]
         [switch]$ByPassScreen
         
     )
@@ -469,11 +486,11 @@ Function Send-Log {
   [CmdletBinding()]
 
   Param (
-    [Parameter(Mandatory=$true,Position=0)][string]$SMTPServer,
-    [Parameter(Mandatory=$true,Position=1)][string]$LogPath,
-    [Parameter(Mandatory=$true,Position=2)][string]$EmailFrom,
-    [Parameter(Mandatory=$true,Position=3)][string]$EmailTo,
-    [Parameter(Mandatory=$true,Position=4)][string]$EmailSubject
+    [Parameter(Mandatory=$True,Position=0)][string]$SMTPServer,
+    [Parameter(Mandatory=$True,Position=1)][string]$LogPath,
+    [Parameter(Mandatory=$True,Position=2)][string]$EmailFrom,
+    [Parameter(Mandatory=$True,Position=3)][string]$EmailTo,
+    [Parameter(Mandatory=$True,Position=4)][string]$EmailSubject
   )
 
   Process {
@@ -535,7 +552,7 @@ Function Reset-Log{
 		[ValidateNotNullOrEmpty()][int]$logcount 
 	)
  
-    $logRollStatus = $true
+    $logRollStatus = $True
     if(test-path $filename)
     {
         $file = Get-ChildItem $filename
@@ -593,15 +610,16 @@ Function Reset-Log{
 
           }
          else
-         { $logRollStatus = $false}
+         { $logRollStatus = $False}
     }
     else
     {
-        $logrollStatus = $false
+        $logrollStatus = $False
     }
     $logRollStatus
 }
 
 
 
-Export-ModuleMember -function *
+Export-ModuleMember -function 'Initialize-Log','Start-Log','Stop-Log','Write-LogEntry','Send-Log'
+
