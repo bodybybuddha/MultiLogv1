@@ -19,24 +19,24 @@ $ModuleName = 'MultiLogv1'
 Function Initialize-Log{
 [CmdletBinding()]
 Param (
-	[Parameter(Mandatory=$True)]
-	[string]$ExecutingScriptName,
     [Parameter(Mandatory=$True)]
-	[ValidateSet('LOGFILE','EVENT','CIRCULAR')]
+    [string]$ExecutingScriptName,
+    [Parameter(Mandatory=$True)]
+    [ValidateSet('LOGFILE','EVENT','CIRCULAR')]
     [string]$LogType,
-	[Parameter(Mandatory=$True,ParameterSetName="LOGFILECIRCULAR")]
+    [Parameter(Mandatory=$True,ParameterSetName="LOGFILECIRCULAR")]
     [string]$LogFileName,	
-	[Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
+    [Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
     [string]$LogFileExtension = '.log',
-	[Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]
+    [Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]
     [string]$ArchiveSize = $DefaultSizeOfArchives,	
-	[Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
+    [Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
     [string]$ArchiveNumber= $DefaultNumOfArchives,
     [Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
     [string]$EventLogName = $ModuleName,
-	[Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
+    [Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
     [string]$EventLogRetention = $DefaultEventLogRetention,
-	[Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
+    [Parameter(Mandatory=$False,ParameterSetName="EVENT")]	
     [string]$EventLogSize = $DefaultEventLogSize
     )
 	
@@ -106,7 +106,7 @@ Param (
 		}
 
 		#Create file and start logging
-		New-Item -Path $PSLoggingEnv.LogFileName ñItemType File  | out-null
+		New-Item -Path $PSLoggingEnv.LogFileName ÔøΩItemType File  | out-null
 	} 
 
 	If($PSLoggingEnv.LogType -eq "EVENT"){
@@ -289,54 +289,24 @@ Function Write-LogEntry {
     Writes a message to specified log file
     .DESCRIPTION
     Appends a new message to the specified log file
-    .PARAMETER LogPath
-    Mandatory. Full path of the log file you want to write to. Example: C:\Windows\Temp\Test_Script.log
-    
+    .PARAMETER LogObject
+    Mandatory. PS Custom object created from the Initialize-Log cmdlet.    
     .PARAMETER MessageType
-    Mandatory. Allowed message types: INFO, WARNING, ERROR, CRITICAL, START, STOP, SUCCESS, FAILURE
+    Mandatory. Allowed message types: "ERROR", "WARNING", "INFORMATION", "SUCCESSAUDIT", "FAILUREAUDIT"    
     .PARAMETER Message
-    Mandatory. The string that you want to write to the log
-    .PARAMETER TimeStamp
-    Optional. When parameter specified will append the current date and time to the end of the line. Useful for knowing
-    when a task started and stopped.
-    
-    .PARAMETER EntryDateTime
-    Optional. By default a current date and time is used but it is possible provide any other correct date/time.
-    
-    .PARAMETER ConvertTimeToUTF
-    # Need be filled
-    .PARAMETER ToScreen
-    Optional. When parameter specified will display the content to screen as well as write to log file. This provides an additional
-    another option to write content to screen as opposed to using debug mode.
-    
-    .PARAMETER
+    Mandatory. The string that you want to write to the log    
+    .PARAMETER EventId
+    Optional.  If provided, the entry will be added to the appropriate location when writing the message to a log.  For instance, if you are writing to a file, the Event ID will be added to the output line.  If you're writing to the Event log, it will be used as the Event Id for that entry.  Only positive integers are allowed here.  All negative numbers will be converted to their positive eqivalents.  By default, a 0 is used.
+    .PARAMETER ByPassScreen
+    Optional. When parameter specified will bypass displaying the content to screen.  Default behavior of displaying messages on the screen can controlled by changing the OutScreen property of the LogObject passed into this function.  Note: debug mode may double up any screen displays.    
     .INPUTS
     Parameters above
     .OUTPUTS
     None or String
     .NOTES
-    
-	Current version:  1.2.0
-	
-	Authors: 
-	- Wojciech Sciesinski wojciech[at]sciesinski[dot]net
-	
-	Version history: github.com/9to5IT/PSLogging/VERSIONS.MD
-    
-    Inspired and partially based on PSLogging module authored by Luca Sturlese - https://github.com/9to5IT/PSLogging
-    
-    TODO
-    Updated examples - add additional with new implemented parameters
-    Implement converting day/time to UTF
-    Output with colors (?) - Write-Host except Write-Output need to be used
-    
+    See VERSIONS.md in the github repo for historical version information.
     .LINK
-    http://9to5IT.com/powershell-logging-v2-easily-create-log-files
-    .LINK
-    https://github.com/it-praktyk/PSLogging
-    
-    .LINK
-    https://www.linkedin.com/in/sciesinskiwojciech
+    https://github.com/bodybybuddha/MultiLogv1/wiki/Write‚ÄêLogEntry
     
     .EXAMPLE
     Write-LogEntry -LogPath "C:\Windows\Temp\Test_Script.log" -MessageType CRITICAL -Message "This is a new line which I am appending to the end of the log file."
