@@ -1,4 +1,6 @@
 #MultiLogv1
+# For help: https://github.com/bodybybuddha/MultiLogv1/wiki
+
 #Based on:
 #  PSLogging from Luca Sturlese @ URL: http://9to5IT.com & https://github.com/9to5IT/PSLogging
 #  PSLogging (Write-LogEntry) from Wojciech Sciesinski @ URL: https://github.com/it-praktyk/PSLogging
@@ -10,13 +12,55 @@ Set-StrictMode -Version Latest
 #Internal variables for the module 
 [int32]$DefaultNumOfArchives = 10
 [int64]$DefaultSizeOfArchives = 1mb
-[int32]$DefaultEventLogRetention = 10
+[int32]$DefaultEventLogRetention = 30
 [int64]$DefaultEventLogSize = 20mb
 
 $Version = '1.01'
 $ModuleName = 'MultiLogv1'
 
 Function Initialize-Log{
+<#
+    .SYNOPSIS
+    This function will return back a PS Custom Object that will be used with all of the functions in the MultiLogv1 module.  It will also prepare/Initialize any needed items for the script work.  For instance, if you opt for event log logging, this function will ensure that an event log exists to write to.
+    .DESCRIPTION
+    This function will return back a PS Custom Object that will be used with all of the functions in the MultiLogv1 module.  It will also prepare/Initialize any needed items for the script work.  For instance, if you opt for event log logging, this function will ensure that an event log exists to write to. 
+    .PARAMETER ExecutingScriptName
+    Mandatory. Name of the script executing this function.     
+    .PARAMETER LogType
+    Mandatory. Can be one of the following:  'LOGFILE','EVENT','CIRCULAR'   
+    .PARAMETER LogFileName
+    Mandatory. The path and file name of the log file desired.  This is used for both Log Types LOGFILE and CIRCULAR.
+    .PARAMETER ArchiveSize
+    Optional. If the Logtype is CIRCULAR, this parameter will allow you to specify a different size for the log file sizes.  The default is 1mb.  This is a [int64] variable type.  However, PowerShell is so smart you can use shortcuts, i.e. 1mb, 2gb, 50kb, etc.
+    .PARAMETER ArchiveNumber
+    Optional. If the log type is CIRCULAR, this parameter will allow you to specify a different number of log files to be kept.  The default is 10.
+    .PARAMETER EventLogName
+    Optional.  If the log type is EVENT, this parameter will allow you to specify the Event log to be written to.  By default, the script will use 'MultiLogv1'.  The first time this is executed, and either the default EventLogName is used or a different, non-existing event log name is given, it will be created.  You can use the existing Event Log names if you like as well (Application, etc).  Note:  You must be an administrator on the machine you are attempting to create an Event log on.
+    .PARAMETER EventLogRetention
+    Optional. When a new event log is created on a machine, this script will default to creating one that will retain 30 days worth of entries (given we don't go over the set size of the event log -- See EventLogSize parameter.)  This parameter will allow you to customize the number of days the events will be kept before overwritten.
+    .PARAMETER EventLogSize
+    Optional.  When a new event log is created on a machine, this script will default to creating one that is 20mb.  This parameter will allow you to override the defaults.  This is an [int64] field.  However, PowerShell is so smart you can use shortcuts, i.e. 1mb, 2gb, 50kb, etc. Note: The number specified must be in increments of 64kb.  Otherwise, the script will generate an error.
+    .INPUTS
+    Parameters above
+    .OUTPUTS
+    PS Custom Object to represent the LogObject
+    .NOTES
+    See VERSIONS.md in the github repo for historical version information.
+    .LINK
+    https://github.com/bodybybuddha/MultiLogv1/wiki
+    
+    .EXAMPLE
+    $LogObj = Initialize-Log -ExecutingScriptName 'My.Script' -LogType 'LOGFILE' -LogFileName 'c:\temp\logs\log.log'
+    Creates a new log file at 'c:\temp\logs\log.log'
+
+    .EXAMPLE
+    $LogObj = Initialize-Log -ExecutingScriptName 'My.Script' -LogType 'CIRCULAR' -LogFileName 'c:\temp\logs\log.log' -ArchiveSize 5mb -ArchiveNumber 30 
+    Creates a new log file at 'c:\temp\logs\log.log' on the initial run. When filling in the log file, the system will monitor the size of the file.  Once the file goes over 5mb, it will rename the log.log file to log.log.1, and create a new log.log file.  If there is already another log.log.1 file, that file will renamed to log.log.2.  This will be repeated until the Archive Number of 30 is reached.  In which case the last one will be removed.
+
+    .EXAMPLE
+    $LogObj = Initialize-Log -ExecutingScriptName 'My.Script' -LogType 'EVENT' 
+    Creates a new event log called 'MultiLogv1'.  It will register a new Event log source of the ExecutingScriptName.  The new event log will have the default settings of only retaining 30 days or 20mb of information.        
+  #>
 [CmdletBinding()]
 Param (
     [Parameter(Mandatory=$True)]
@@ -26,8 +70,6 @@ Param (
     [string]$LogType,
     [Parameter(Mandatory=$True,ParameterSetName="LOGFILECIRCULAR")]
     [string]$LogFileName,	
-    [Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
-    [string]$LogFileExtension = '.log',
     [Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]
     [string]$ArchiveSize = $DefaultSizeOfArchives,	
     [Parameter(Mandatory=$False,ParameterSetName="LOGFILECIRCULAR")]	
@@ -44,20 +86,12 @@ Param (
 	#  Need to test for parameters & some Initializing variables
 	#####################################################################################
 	if($LogType -eq "LOGFILE") {
-		# Check for LogFileName - IF none found use the ExecutingScriptName and default logfile extension
-		If(!$LogFileName){ 
-			$LogFileName = $ExecutingScriptName + $LogFileExtension					
-		}		
+		
 	}
     if($LogType -eq "EVENT") {
-		#if(!$EventLogRetention){$EventLogRetention = $DefaultEventLogRetention}
-		#if(!$EventLogSize){$EventLogSize = $DefaultEventLogSize }
+
 	}
     if($LogType -eq "CIRCULAR") {
-		# Check for LogFileName - IF none found use the ExecutingScriptName and default logfile extension
-		If(!$LogFileName){ 
-			$LogFileName = $ExecutingScriptName + $LogFileExtension					
-		}		
 	
 	}
     
@@ -174,6 +208,32 @@ Function CheckLogObject{
 } # End Function CheckLogObject
 
 Function Start-Log{
+<#
+    .SYNOPSIS
+    Optional command - Adds a starting header for the log.  If you are using a file, it'll have a clear header section.  If you are using an event log, it'll be very simple.
+    .DESCRIPTION
+    Optional command - Adds a starting header for the log.  If you are using a file, it'll have a clear header section.  If you are using an event log, it'll be very simple.
+    .PARAMETER LogObject
+    Mandatory. PS Custom object created from the Initialize-Log cmdlet.      
+    .PARAMETER ByPassScreen
+    Optional. When parameter specified will bypass displaying the content to screen.  Default behavior of displaying messages on the screen can controlled by changing the OutScreen property of the LogObject passed into this function.  Note: debug mode may double up any screen displays.    
+    .INPUTS
+    Parameters above
+    .OUTPUTS
+    None or String
+    .NOTES
+    See VERSIONS.md in the github repo for historical version information.
+    .LINK
+    https://github.com/bodybybuddha/MultiLogv1/wiki
+    
+    .EXAMPLE
+    Start-Log -LogObject $LogObj 
+    Writes a Start log header to the log.
+    
+    .EXAMPLE
+    Start-Log -LogObject $LogObj -ByPassScreen
+    Writes a Start log header to the log - but doesn't write anything to the screen.    
+#>
 	[CmdletBinding()]
 	Param (
     [Parameter(Mandatory=$True)]
@@ -231,6 +291,32 @@ Function Start-Log{
 }  # End Function Start-Log
 
 Function Stop-Log{
+<#
+    .SYNOPSIS
+    Optional command - Adds a ending block of test to the log.  If you are using a file, it'll have a clear section.  If you are using an event log, it'll be very simple.
+    .DESCRIPTION
+    Optional command - Adds a ending block of test to the log.  If you are using a file, it'll have a clear section.  If you are using an event log, it'll be very simple.
+    .PARAMETER LogObject
+    Mandatory. PS Custom object created from the Initialize-Log cmdlet.      
+    .PARAMETER ByPassScreen
+    Optional. When parameter specified will bypass displaying the content to screen.  Default behavior of displaying messages on the screen can controlled by changing the OutScreen property of the LogObject passed into this function.  Note: debug mode may double up any screen displays.    
+    .INPUTS
+    Parameters above
+    .OUTPUTS
+    None or String
+    .NOTES
+    See VERSIONS.md in the github repo for historical version information.
+    .LINK
+    https://github.com/bodybybuddha/MultiLogv1/wiki
+
+    .EXAMPLE
+    Stop-Log -LogObject $LogObj 
+    Writes a Stop log line to the log.
+
+    .EXAMPLE
+    Stop-Log -LogObject $LogObj -ByPassScreen
+    Writes a Stop log section to the log - but doesn't write anything to the screen.
+#>
 [CmdletBinding()]
 Param (
     [Parameter(Mandatory=$True)]
@@ -306,14 +392,16 @@ Function Write-LogEntry {
     .NOTES
     See VERSIONS.md in the github repo for historical version information.
     .LINK
-    https://github.com/bodybybuddha/MultiLogv1/wiki/Write‐LogEntry
+    https://github.com/bodybybuddha/MultiLogv1/wiki
     
     .EXAMPLE
-    Write-LogEntry -LogPath "C:\Windows\Temp\Test_Script.log" -MessageType CRITICAL -Message "This is a new line which I am appending to the end of the log file."
-    Writes a new critical log message to a new line in the specified log file.
+    Write-LogEntry -LogObject $LogObj -MessageType INFORMATION -Message "This is a new line which I am appending to the end of the log file."
+    Writes a new message to a new line in the specified log file.
     
-  #>
-    
+    .EXAMPLE
+    Write-LogEntry -LogObject $LogObj -MessageType Error -EventId 1000 -Message "Error situation.. do something"
+    Writes a new Error log message to a new line in the specified log file.    
+  #>    
     [CmdletBinding()]
     Param (        
         [Parameter(Mandatory = $True)]
@@ -352,17 +440,12 @@ Function Write-LogEntry {
 		[String]$EventString = if($EventId -eq 0){''}else{[string]': Event ID ' + [string]$EventId}
         
 		#Add TimeStamp to message if required
-		If ($LogObject.IncludeDateTime -eq $True) {
-			
+		If ($LogObject.IncludeDateTime -eq $True) {			
 			[String]$MessageToFile = "[{0}][{1}{2}]{3}: {4}" -f $EntryDateTime, $CapitalizedMessageType, $Padding, $EventString, $Message				
 			[String]$MessageToScreen = "[{0}] {1}{2}: {3}" -f $EntryDateTime, $CapitalizedMessageType, $EventString, $Message
-			
-		}
-		Else {
-			
+		} Else {
 			[String]$MessageToFile = "[{0}{1}]{2}[{3}]" -f $type, $Padding, $EventString, $Message				
 			[String]$MessageToScreen = "{0}{1}: {2}" -f $type, $EventString, $Message
-			
 		}
 		
         #Write Content to Log
@@ -375,109 +458,91 @@ Function Write-LogEntry {
 			Add-Content -Path $LogObject.LogFileName -Value $MessageToFile
 		}
 
-		If($LogObject.LogType -eq "EVENT"){
-		
+		If($LogObject.LogType -eq "EVENT"){		
 			Write-EventLog -LogName $LogObject.EventModuleName -Source $LogObject.ScriptName -EntryType $CapitalizedMessageType -EventId $EventId -Message $Message
-		
 		}
 		
         #Write to screen for debug mode
         Write-Debug $MessageToScreen
         
         #Write to screen for OutScreen mode
-		If ($ByPassScreen){return
+		If ($ByPassScreen){
+            return
 		} else { 
 			if($LogObject.OutScreen){
 				Write-Output $MessageToScreen
 			}
 
 		}
-       
-        
-    }
-}
+
+    } # End of Process
+} # End of Function Write-LogEntry
 
 Function Send-Log {
-  <#
-  .SYNOPSIS
+<#
+    .SYNOPSIS
     Emails completed log file to list of recipients
 
-  .DESCRIPTION
+    .DESCRIPTION
     Emails the contents of the specified log file to a list of recipients
 
-  .PARAMETER SMTPServer
+    .PARAMETER SMTPServer
     Mandatory. FQDN of the SMTP server used to send the email. Example: smtp.google.com
 
-  .PARAMETER LogPath
+    .PARAMETER LogPath
     Mandatory. Full path of the log file you want to email. Example: C:\Windows\Temp\Test_Script.log
 
-  .PARAMETER EmailFrom
+    .PARAMETER EmailFrom
     Mandatory. The email addresses of who you want to send the email from. Example: "admin@9to5IT.com"
 
-  .PARAMETER EmailTo
+    .PARAMETER EmailTo
     Mandatory. The email addresses of where to send the email to. Seperate multiple emails by ",". Example: "admin@9to5IT.com, test@test.com"
 
-  .PARAMETER EmailSubject
+    .PARAMETER EmailSubject
     Mandatory. The subject of the email you want to send. Example: "Cool Script - [" + (Get-Date).ToShortDateString() + "]"
 
-  .INPUTS
+    .INPUTS
     Parameters above
 
-  .OUTPUTS
+    .OUTPUTS
     Email sent to the list of addresses specified
 
-  .NOTES
-    Version:        1.0
-    Author:         Luca Sturlese
-    Creation Date:  05.10.12
-    Purpose/Change: Initial function development.
+    .NOTES
+    See VERSIONS.md in the github repo for historical version information.
+    
+    .LINK
+    https://github.com/bodybybuddha/MultiLogv1/wiki
 
-    Version:        1.1
-    Author:         Luca Sturlese
-    Creation Date:  02/09/15
-    Purpose/Change: Changed function name to use approved PowerShell Verbs. Improved help documentation.
-
-    Version:        1.2
-    Author:         Luca Sturlese
-    Creation Date:  02/09/15
-    Purpose/Change: Added SMTPServer parameter to pass SMTP server as oppposed to having to set it in the function manually.
-
-  .LINK
-    http://9to5IT.com/powershell-logging-v2-easily-create-log-files
-
-  .EXAMPLE
+    .EXAMPLE
     Send-Log -SMTPServer "smtp.google.com" -LogPath "C:\Windows\Temp\Test_Script.log" -EmailFrom "admin@9to5IT.com" -EmailTo "admin@9to5IT.com, test@test.com" -EmailSubject "Cool Script"
 
     Sends an email with the contents of the log file as the body of the email. Sends the email from admin@9to5IT.com and sends
     the email to admin@9to5IT.com and test@test.com email addresses. The email has the subject of Cool Script. The email is
     sent using the smtp.google.com SMTP server.
-  #>
+#>
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$True,Position=0)][string]$SMTPServer,
+        [Parameter(Mandatory=$True,Position=1)][string]$LogPath,
+        [Parameter(Mandatory=$True,Position=2)][string]$EmailFrom,
+        [Parameter(Mandatory=$True,Position=3)][string]$EmailTo,
+        [Parameter(Mandatory=$True,Position=4)][string]$EmailSubject
+    )
 
-  [CmdletBinding()]
+    Process {
+        Try {
+            $sBody = ( Get-Content $LogPath | Out-String )
 
-  Param (
-    [Parameter(Mandatory=$True,Position=0)][string]$SMTPServer,
-    [Parameter(Mandatory=$True,Position=1)][string]$LogPath,
-    [Parameter(Mandatory=$True,Position=2)][string]$EmailFrom,
-    [Parameter(Mandatory=$True,Position=3)][string]$EmailTo,
-    [Parameter(Mandatory=$True,Position=4)][string]$EmailSubject
-  )
-
-  Process {
-    Try {
-      $sBody = ( Get-Content $LogPath | Out-String )
-
-      #Create SMTP object and send email
-      $oSmtp = new-object Net.Mail.SmtpClient( $SMTPServer )
-      $oSmtp.Send( $EmailFrom, $EmailTo, $EmailSubject, $sBody )
-      Exit 0
-    }
-
-    Catch {
-      Exit 1
-    }
-  }
-}
+            #Create SMTP object and send email
+            $oSmtp = new-object Net.Mail.SmtpClient( $SMTPServer )
+            $oSmtp.Send( $EmailFrom, $EmailTo, $EmailSubject, $sBody )
+            Exit 0
+        }
+        Catch {
+            Exit 1
+        }
+    } # End of Process
+} # End of Function Send-Log
 
 Function Reset-Log{
 <#
@@ -513,8 +578,7 @@ Function Reset-Log{
      [boolean] this indicates whether the function rolled to a new log number.
   .FUNCTIONALITY
      Log Rolling utility - function
-  #>
-	
+#>
 	[CmdletBinding()]
     param(
 		[parameter(mandatory)][string]$fileName, 
@@ -530,11 +594,11 @@ Function Reset-Log{
         {
             $fileDir = $file.Directory
             $fn = $file.name #this gets the name of the file we started with
-            $files = @(Get-ChildItem $filedir | Where-Object{$_.name -like "$fn*"} | Sort-Object lastwritetime)
+            $files = @(Get-ChildItem $filedir | Where-Object{$_.name -like "$fn*"} | Sort-Object lastwritetime) #Need to force array
             $filefullname = $file.fullname #this gets the fullname of the file we started with
             for ($i = ($files.count); $i -gt 0; $i--)
             { 
-                $files = @(Get-ChildItem $filedir | Where-Object{$_.name -like "$fn*"} | Sort-Object lastwritetime)
+                $files = @(Get-ChildItem $filedir | Where-Object{$_.name -like "$fn*"} | Sort-Object lastwritetime) #Need to force array
                 $operatingFile = $files | Where-Object{($_.name).trim($fn) -eq $i}
                 if ($operatingfile)
                  {$operatingFilenumber = ($files | Where-Object{($_.name).trim($fn) -eq $i}).name.trim($fn)}
