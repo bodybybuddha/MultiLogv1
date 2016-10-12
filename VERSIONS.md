@@ -1,5 +1,8 @@
 # Versions #
 
+## v1.02 ##
+ - Fixed a typo that caused an issue with creating LOGFILE type logs
+
 ## v1.01 ##
 
  - Added default settings for Circular logging. Parameters to change the default added when Initialize-log is executed.

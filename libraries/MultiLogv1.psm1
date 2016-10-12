@@ -15,7 +15,7 @@ Set-StrictMode -Version Latest
 [int32]$DefaultEventLogRetention = 30
 [int64]$DefaultEventLogSize = 20mb
 
-$Version = '1.01'
+$Version = '1.02'
 $ModuleName = 'MultiLogv1'
 
 Function Initialize-Log{
@@ -140,7 +140,7 @@ Param (
 		}
 
 		#Create file and start logging
-		New-Item -Path $PSLoggingEnv.LogFileName �ItemType File  | out-null
+		New-Item -Path $PSLoggingEnv.LogFileName -ItemType File  | out-null
 	} 
 
 	If($PSLoggingEnv.LogType -eq "EVENT"){
