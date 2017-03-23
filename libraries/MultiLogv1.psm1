@@ -15,7 +15,7 @@ Set-StrictMode -Version Latest
 [int32]$DefaultEventLogRetention = 30
 [int64]$DefaultEventLogSize = 20mb
 
-$Version = '1.02'
+$Version = '1.05'
 $ModuleName = 'MultiLogv1'
 
 Function Initialize-Log{
@@ -105,7 +105,8 @@ Param (
 		LogModuleVersion = $Version
 		LogType = $LogType
 		IncludeDateTime = $True
-		OutScreen = $True	
+		OutScreen = $True
+		LogLevel = 0 
 	} # main custom object to be passed back to calling script
 
 	#  The NoteProperty ones could've been done in initial declartion, this is just an example	
@@ -281,10 +282,10 @@ Function Start-Log{
     write-Debug "Current Version of Powershell: $($psversiontable.psversion)"
 	
 	if($ByPassScreen){return} else { if($LogObject.OutScreen){
-		Write-Output "***************************************************************************************************"
-		Write-Output "Started processing at [$($EntryDateTime)]."
-		Write-Output "***************************************************************************************************"
-		Write-Output ""	
+		Write-Host "***************************************************************************************************"
+		Write-Host "Started processing at [$($EntryDateTime)]."
+		Write-Host "***************************************************************************************************"
+		Write-Host ""	
 		}
 	}
 
@@ -359,11 +360,11 @@ Param (
     Write-Debug ""
 	
 	if($ByPassScreen){return} else { if($LogObject.OutScreen){
-		Write-Output ""	
-		Write-Output "***************************************************************************************************"
-		Write-Output "Finished processing at [$($EntryDateTime)]."
-		Write-Output "***************************************************************************************************"
-		Write-Output ""	
+		Write-Host ""	
+		Write-Host "***************************************************************************************************"
+		Write-Host "Finished processing at [$($EntryDateTime)]."
+		Write-Host "***************************************************************************************************"
+		Write-Host ""	
 	}
 	}
 
@@ -384,7 +385,9 @@ Function Write-LogEntry {
     .PARAMETER EventId
     Optional.  If provided, the entry will be added to the appropriate location when writing the message to a log.  For instance, if you are writing to a file, the Event ID will be added to the output line.  If you're writing to the Event log, it will be used as the Event Id for that entry.  Only positive integers are allowed here.  All negative numbers will be converted to their positive eqivalents.  By default, a 0 is used.
     .PARAMETER ByPassScreen
-    Optional. When parameter specified will bypass displaying the content to screen.  Default behavior of displaying messages on the screen can controlled by changing the OutScreen property of the LogObject passed into this function.  Note: debug mode may double up any screen displays.    
+    Optional. When parameter is specified will bypass displaying the content to screen.  Default behavior of displaying messages on the screen can controlled by changing the OutScreen property of the LogObject passed into this function.  Note: debug mode may double up any screen displays.  
+	.PARAMETER LogLevel
+    Optional. When parameter is specified will set the Log Level.  The default is 0.  If this number is less or equal to the LogObject.LogLevel, the message will be written.  Otherwise it will be bypassed.  	
     .INPUTS
     Parameters above
     .OUTPUTS
@@ -415,8 +418,9 @@ Function Write-LogEntry {
 		[Parameter(Mandatory = $False)]
         [int]$EventId = 0,
         [Parameter(Mandatory = $False)]
-        [switch]$ByPassScreen
-        
+        [switch]$ByPassScreen,
+		[Parameter(Mandatory = $False)]
+        [int]$LogLevel = 0
     )
     
     Process {
@@ -448,31 +452,34 @@ Function Write-LogEntry {
 			[String]$MessageToScreen = "{0}{1}: {2}" -f $type, $EventString, $Message
 		}
 		
-        #Write Content to Log
-		if($LogObject.LogType -eq "LOGFILE"){
-			Add-Content -Path $LogObject.LogFileName -Value $MessageToFile
-		}
-		
-		if($LogObject.LogType -eq "CIRCULAR"){
-			Reset-Log -FileName $LogObject.LogFileName -FileSize $LogObject.ArchiveSize -LogCount $LogObject.ArchiveNumber
-			Add-Content -Path $LogObject.LogFileName -Value $MessageToFile
-		}
-
-		If($LogObject.LogType -eq "EVENT"){		
-			Write-EventLog -LogName $LogObject.EventModuleName -Source $LogObject.ScriptName -EntryType $CapitalizedMessageType -EventId $EventId -Message $Message
-		}
-		
-        #Write to screen for debug mode
-        Write-Debug $MessageToScreen
-        
-        #Write to screen for OutScreen mode
-		If ($ByPassScreen){
-            return
-		} else { 
-			if($LogObject.OutScreen){
-				Write-Output $MessageToScreen
+		#Is Environment log Level less than Messages? If so, write message
+		if($LogObject.LogLevel -le $LogLevel){
+			#Write Content to Log
+			if($LogObject.LogType -eq "LOGFILE"){
+				Add-Content -Path $LogObject.LogFileName -Value $MessageToFile
+			}
+			
+			if($LogObject.LogType -eq "CIRCULAR"){
+				Reset-Log -FileName $LogObject.LogFileName -FileSize $LogObject.ArchiveSize -LogCount $LogObject.ArchiveNumber
+				Add-Content -Path $LogObject.LogFileName -Value $MessageToFile
 			}
 
+			If($LogObject.LogType -eq "EVENT"){		
+				Write-EventLog -LogName $LogObject.EventModuleName -Source $LogObject.ScriptName -EntryType $CapitalizedMessageType -EventId $EventId -Message $Message
+			}
+			
+			#Write to screen for debug mode
+			Write-Debug $MessageToScreen
+			
+			#Write to screen for OutScreen mode
+			If ($ByPassScreen){
+				return
+			} else { 
+				if($LogObject.OutScreen){
+					Write-Host $MessageToScreen
+				}
+
+			}
 		}
 
     } # End of Process
@@ -650,7 +657,7 @@ Function Reset-Log{
     {
         $logrollStatus = $False
     }
-    $logRollStatus
+    #$logRollStatus
 }
 
 

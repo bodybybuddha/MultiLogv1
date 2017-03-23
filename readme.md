@@ -7,6 +7,7 @@ Library to allow PowerShell scripts to write a log to an ASCII log file, a set o
 - **ASCII File**: Create a log file to an ASCII file.  This is meant for scripts that do not execute on scheduled basis.
 - **Circular Log File**: Create a series of ASCII log files with a set number in the series and size per file.  This will allow you to keep a limited number of logs on disk and the script will clean up after itself. 
 - **Windows Event Logging**: The module will allow you to write to the Windows Event log as well.  It will create a new Event Log (default 'Multilogv1') and a new source with a custom name.  
+- **Log Levels** The module will allow you set a certain log level for a particular log.  In conjunction with a -LogLevel parameter in the Write event, will give developers the ability to set different levels of logging.
 
 
 ## Design Overview / How to use ##
